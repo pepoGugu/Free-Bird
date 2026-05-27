@@ -7,25 +7,25 @@
       name="description"
       content="Comprima e converta vídeos para WebM direto no navegador."
     />
-    <meta name="theme-color" content="#4bb8ad" />
+    <meta name="theme-color" content="#5a9f98" />
     <title>Free Bird WebM</title>
-    <link rel="icon" href="./favicon.svg?v=5" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=5" />
+    <link rel="icon" href="./favicon.svg?v=8" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css?v=8" />
     <script
       defer
       src="https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.min.js"
     ></script>
     <script
       defer
-      src="./ffmpeg.js?v=5"
+      src="./ffmpeg.js?v=8"
     ></script>
-    <script defer src="./app.js?v=5"></script>
+    <script defer src="./app.js?v=8"></script>
   </head>
   <body>
     <div class="app-shell">
       <header class="topbar">
         <a class="brand" href="./" aria-label="Free Bird WebM">
-          <img src="./favicon.svg?v=5" alt="" class="brand-mark" />
+          <img src="./favicon.svg?v=8" alt="" class="brand-mark" />
           <span>
             <strong>Free Bird</strong>
             <small>WebM</small>
@@ -79,7 +79,7 @@
                 <label for="qualityRange">Compressão</label>
                 <output id="qualityValue" for="qualityRange">Equilibrado</output>
               </div>
-              <input id="qualityRange" type="range" min="18" max="40" value="32" />
+              <input id="qualityRange" type="range" min="20" max="34" value="28" />
               <div class="scale-hints" aria-hidden="true">
                 <span>Mais qualidade</span>
                 <span>Menor arquivo</span>
@@ -119,12 +119,6 @@
                 <option value="vp9" selected>VP9 menor</option>
                 <option value="vp8">VP8 mais rápido</option>
               </select>
-            </label>
-
-            <label class="toggle-row">
-              <input id="removeAudio" type="checkbox" />
-              <span class="toggle-ui" aria-hidden="true"></span>
-              <span>Remover áudio</span>
             </label>
           </div>
 

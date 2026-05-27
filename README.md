@@ -6,7 +6,7 @@ App estático para comprimir e converter vídeos para `.webm` direto no navegado
 
 1. Abra `index.html` em um servidor local ou publique a pasta no GitHub Pages.
 2. Escolha ou arraste um vídeo.
-3. Ajuste compressão, tamanho, FPS, codec e áudio.
+3. Ajuste compressão, tamanho, FPS e codec.
 4. Clique em **Converter para WebM** e baixe o resultado.
 
 ## Publicar no GitHub Pages
@@ -22,4 +22,5 @@ App estático para comprimir e converter vídeos para `.webm` direto no navegado
 - A conversão usa FFmpeg WebAssembly carregado por CDN.
 - Arquivos grandes dependem da memória do navegador.
 - VP9 costuma gerar arquivos menores; VP8 costuma converter mais rápido.
+- A saída é sempre sem áudio.
 - Se o FFmpeg ficar sem memória, o app tenta automaticamente um modo leve com `MediaRecorder`.

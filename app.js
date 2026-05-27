@@ -19,7 +19,6 @@ const els = {
   sizeSelect: document.querySelector("#sizeSelect"),
   fpsSelect: document.querySelector("#fpsSelect"),
   codecSelect: document.querySelector("#codecSelect"),
-  removeAudio: document.querySelector("#removeAudio"),
   convertButton: document.querySelector("#convertButton"),
   downloadLink: document.querySelector("#downloadLink"),
   resetButton: document.querySelector("#resetButton"),
@@ -39,9 +38,9 @@ const els = {
 
 const qualityLabels = [
   { max: 23, text: "Alta qualidade" },
-  { max: 29, text: "Leve" },
-  { max: 35, text: "Equilibrado" },
-  { max: 40, text: "Bem pequeno" },
+  { max: 28, text: "Equilibrado" },
+  { max: 32, text: "Compacto" },
+  { max: 34, text: "Bem pequeno" },
 ];
 
 function init() {
@@ -163,11 +162,10 @@ function clearInput() {
 function resetAll() {
   clearInput();
   revokeUrl("outputUrl");
-  els.qualityRange.value = "32";
+  els.qualityRange.value = "28";
   els.sizeSelect.value = "720";
   els.fpsSelect.value = "original";
   els.codecSelect.value = "vp9";
-  els.removeAudio.checked = false;
   els.downloadLink.hidden = true;
   els.progressWrap.hidden = true;
   els.outputSize.textContent = "-";
@@ -196,28 +194,16 @@ async function convertVideo() {
   els.progressWrap.hidden = false;
 
   try {
-    const ffmpeg = await getFFmpeg();
-    const inputName = `input.${extensionFromName(state.inputFile.name)}`;
-    const outputName = "free-bird-convertido.webm";
-
-    await cleanVirtualFiles(ffmpeg, [inputName, outputName]);
-    await ffmpeg.writeFile(inputName, await fetchFileBytes(state.inputFile));
-
-    setProgress(7, "Convertendo para WebM...");
-    const args = buildFfmpegArgs(inputName, outputName);
-    await ffmpeg.exec(args);
-
-    const data = await ffmpeg.readFile(outputName);
-    const blob = new Blob([data.buffer], { type: "video/webm" });
+    const blob = await convertWithFFmpeg(state.inputFile);
     showOutput(blob);
     setProgress(100, "Conversão concluída.");
     setMessage("WebM pronto para baixar.");
 
-    await cleanVirtualFiles(ffmpeg, [inputName, outputName]);
   } catch (error) {
     console.error(error);
     if (isMemoryError(error)) {
       try {
+        resetFFmpeg();
         setMessage("FFmpeg ficou sem memória. Tentando modo leve do navegador...");
         setProgress(3, "Tentando modo leve...");
         const blob = await convertWithBrowserRecorder(state.inputFile);
@@ -237,6 +223,42 @@ async function convertVideo() {
     state.isBusy = false;
     els.convertButton.disabled = !state.inputFile;
   }
+}
+
+async function convertWithFFmpeg(file) {
+  const ffmpeg = await getFFmpeg();
+  const inputName = `input.${extensionFromName(file.name)}`;
+  const outputName = "free-bird-convertido.webm";
+
+  try {
+    await cleanVirtualFiles(ffmpeg, [inputName, outputName]);
+    await ffmpeg.writeFile(inputName, await fetchFileBytes(file));
+
+    setProgress(7, "Convertendo para WebM...");
+    await ffmpeg.exec(buildFfmpegArgs(inputName, outputName));
+
+    const data = await ffmpeg.readFile(outputName);
+    return new Blob([data.buffer], { type: "video/webm" });
+  } finally {
+    try {
+      await cleanVirtualFiles(ffmpeg, [inputName, outputName]);
+    } catch {
+      // FFmpeg can be unavailable after an out-of-memory abort.
+    }
+  }
+}
+
+function resetFFmpeg() {
+  if (!state.ffmpeg) {
+    return;
+  }
+
+  try {
+    state.ffmpeg.terminate();
+  } catch {
+    // The worker may already be gone after a memory abort.
+  }
+  state.ffmpeg = null;
 }
 
 async function getFFmpeg() {
@@ -310,7 +332,6 @@ async function convertWithBrowserRecorder(file) {
   let recorder = null;
   let frameId = 0;
   let outputStream = null;
-  let sourceStream = null;
 
   if (!context) {
     URL.revokeObjectURL(sourceUrl);
@@ -322,7 +343,7 @@ async function convertWithBrowserRecorder(file) {
     video.preload = "auto";
     video.playsInline = true;
     video.volume = 0;
-    video.muted = els.removeAudio.checked;
+    video.muted = true;
     video.style.cssText = "position:fixed;left:-2px;top:-2px;width:1px;height:1px;opacity:0;pointer-events:none;";
     document.body.append(video);
 
@@ -334,14 +355,6 @@ async function convertWithBrowserRecorder(file) {
     canvas.height = height;
     outputStream = canvas.captureStream(fps);
 
-    if (!els.removeAudio.checked) {
-      const captureStream = video.captureStream || video.mozCaptureStream;
-      if (captureStream) {
-        sourceStream = captureStream.call(video);
-        sourceStream.getAudioTracks().forEach((track) => outputStream.addTrack(track));
-      }
-    }
-
     const chunks = [];
     const mimeType = recorderMimeType();
     const recorderOptions = {
@@ -350,10 +363,6 @@ async function convertWithBrowserRecorder(file) {
 
     if (mimeType) {
       recorderOptions.mimeType = mimeType;
-    }
-
-    if (!els.removeAudio.checked) {
-      recorderOptions.audioBitsPerSecond = 96000;
     }
 
     recorder = new MediaRecorder(outputStream, recorderOptions);
@@ -418,7 +427,6 @@ async function convertWithBrowserRecorder(file) {
     video.load();
     video.remove();
     stopStream(outputStream);
-    stopStream(sourceStream);
     URL.revokeObjectURL(sourceUrl);
   }
 }
@@ -449,22 +457,20 @@ function fallbackSize(sourceWidth, sourceHeight) {
 }
 
 function fallbackFps() {
-  return els.fpsSelect.value === "original" ? 30 : Number(els.fpsSelect.value);
+  return els.fpsSelect.value === "original" ? 60 : Number(els.fpsSelect.value);
 }
 
 function recorderMimeType() {
   const codec = els.codecSelect.value === "vp8" ? "vp8" : "vp9";
-  const candidates = els.removeAudio.checked
-    ? [`video/webm;codecs=${codec}`, "video/webm;codecs=vp8", "video/webm"]
-    : [`video/webm;codecs=${codec},opus`, `video/webm;codecs=${codec}`, "video/webm;codecs=vp8,opus", "video/webm"];
+  const candidates = [`video/webm;codecs=${codec}`, "video/webm;codecs=vp8", "video/webm"];
 
   return candidates.find((type) => MediaRecorder.isTypeSupported(type)) || "";
 }
 
 function recorderVideoBitrate(width, height, fps) {
   const crf = Number(els.qualityRange.value);
-  const quality = clamp((42 - crf) / 18, 0.35, 1.45);
-  return Math.round(clamp(width * height * fps * 0.085 * quality, 250_000, 4_000_000));
+  const quality = clamp((38 - crf) / 14, 0.5, 1.35);
+  return Math.round(clamp(width * height * fps * 0.11 * quality, 350_000, 5_500_000));
 }
 
 function stopStream(stream) {
@@ -495,31 +501,42 @@ function clamp(value, min, max) {
 
 function buildFfmpegArgs(inputName, outputName) {
   const codec = els.codecSelect.value;
-  const args = ["-i", inputName, "-map", "0:v:0"];
+  const args = ["-i", inputName, "-map", "0:v:0", "-an", "-sn", "-dn"];
   const filters = [];
   const maxHeight = els.sizeSelect.value;
   const fps = els.fpsSelect.value;
 
   if (maxHeight !== "original") {
-    filters.push(`scale=-2:min(${maxHeight}\\,ih)`);
+    filters.push(`scale=-2:min(${maxHeight}\\,ih):flags=lanczos`);
   }
 
   if (fps !== "original") {
-    filters.push(`fps=${fps}`);
+    filters.push(`fps=${fps}:round=near`);
   }
 
   if (filters.length) {
     args.push("-vf", filters.join(","));
   }
 
-  if (els.removeAudio.checked) {
-    args.push("-an");
-  } else {
-    args.push("-map", "0:a?", "-c:a", "libopus", "-b:a", "96k");
+  if (fps === "original") {
+    args.push("-fps_mode", "passthrough");
   }
 
   if (codec === "vp8") {
-    args.push("-c:v", "libvpx", "-b:v", "900k", "-deadline", "realtime", "-cpu-used", "8");
+    args.push(
+      "-c:v",
+      "libvpx",
+      "-b:v",
+      "1400k",
+      "-deadline",
+      "good",
+      "-cpu-used",
+      "4",
+      "-threads",
+      "1",
+      "-pix_fmt",
+      "yuv420p",
+    );
   } else {
     args.push(
       "-c:v",
@@ -531,7 +548,15 @@ function buildFfmpegArgs(inputName, outputName) {
       "-deadline",
       "good",
       "-cpu-used",
-      "5",
+      "3",
+      "-row-mt",
+      "1",
+      "-tile-columns",
+      "1",
+      "-lag-in-frames",
+      "25",
+      "-pix_fmt",
+      "yuv420p",
     );
   }
 
@@ -603,8 +628,11 @@ function revokeUrl(key) {
 
 function errorMessage(error) {
   const detail = error?.message || String(error);
+  if (/modo leve|ler esse vídeo/i.test(detail)) {
+    return "Esse vídeo não abre no modo leve do navegador. Tente codec VP8, tamanho menor ou um trecho menor do vídeo.";
+  }
   if (/memory|allocation/i.test(detail)) {
-    return "O navegador ficou sem memória. Tente 480p, VP8 ou um trecho menor do vídeo.";
+    return "O navegador ficou sem memória. Tente VP8, tamanho menor ou um trecho menor do vídeo.";
   }
   if (/SharedArrayBuffer|cross-origin/i.test(detail)) {
     return "O navegador bloqueou recursos do FFmpeg. Publique no GitHub Pages ou rode por um servidor local.";
