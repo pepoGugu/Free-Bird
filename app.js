@@ -209,24 +209,30 @@ async function convertVideo() {
 
     const data = await ffmpeg.readFile(outputName);
     const blob = new Blob([data.buffer], { type: "video/webm" });
-    state.outputUrl = URL.createObjectURL(blob);
-
-    els.videoPreview.src = state.outputUrl;
-    els.videoPreview.hidden = false;
-    els.previewEmpty.hidden = true;
-    els.downloadLink.href = state.outputUrl;
-    els.downloadLink.download = outputFileName(state.inputFile.name);
-    els.downloadLink.hidden = false;
-    els.outputSize.textContent = formatBytes(blob.size);
-    els.savingSize.textContent = savingsText(state.inputFile.size, blob.size);
+    showOutput(blob);
     setProgress(100, "Conversão concluída.");
     setMessage("WebM pronto para baixar.");
 
     await cleanVirtualFiles(ffmpeg, [inputName, outputName]);
   } catch (error) {
     console.error(error);
-    setMessage(errorMessage(error), true);
-    setProgress(0, "Falhou.");
+    if (isMemoryError(error)) {
+      try {
+        setMessage("FFmpeg ficou sem memória. Tentando modo leve do navegador...");
+        setProgress(3, "Tentando modo leve...");
+        const blob = await convertWithBrowserRecorder(state.inputFile);
+        showOutput(blob);
+        setProgress(100, "Conversão concluída no modo leve.");
+        setMessage("WebM pronto para baixar. Usei o modo leve porque o FFmpeg estourou memória.");
+      } catch (fallbackError) {
+        console.error(fallbackError);
+        setMessage(errorMessage(fallbackError), true);
+        setProgress(0, "Falhou.");
+      }
+    } else {
+      setMessage(errorMessage(error), true);
+      setProgress(0, "Falhou.");
+    }
   } finally {
     state.isBusy = false;
     els.convertButton.disabled = !state.inputFile;
@@ -290,6 +296,201 @@ async function toBlobURL(url, mimeType) {
 
   const blob = new Blob([await response.arrayBuffer()], { type: mimeType });
   return URL.createObjectURL(blob);
+}
+
+async function convertWithBrowserRecorder(file) {
+  if (!window.MediaRecorder) {
+    throw new Error("O modo leve não está disponível neste navegador.");
+  }
+
+  const sourceUrl = URL.createObjectURL(file);
+  const video = document.createElement("video");
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d", { alpha: false });
+  let recorder = null;
+  let frameId = 0;
+  let outputStream = null;
+  let sourceStream = null;
+
+  if (!context) {
+    URL.revokeObjectURL(sourceUrl);
+    throw new Error("Canvas não está disponível neste navegador.");
+  }
+
+  try {
+    video.src = sourceUrl;
+    video.preload = "auto";
+    video.playsInline = true;
+    video.volume = 0;
+    video.muted = els.removeAudio.checked;
+    video.style.cssText = "position:fixed;left:-2px;top:-2px;width:1px;height:1px;opacity:0;pointer-events:none;";
+    document.body.append(video);
+
+    await waitForVideoMetadata(video);
+
+    const { width, height } = fallbackSize(video.videoWidth, video.videoHeight);
+    const fps = fallbackFps();
+    canvas.width = width;
+    canvas.height = height;
+    outputStream = canvas.captureStream(fps);
+
+    if (!els.removeAudio.checked) {
+      const captureStream = video.captureStream || video.mozCaptureStream;
+      if (captureStream) {
+        sourceStream = captureStream.call(video);
+        sourceStream.getAudioTracks().forEach((track) => outputStream.addTrack(track));
+      }
+    }
+
+    const chunks = [];
+    const mimeType = recorderMimeType();
+    const recorderOptions = {
+      videoBitsPerSecond: recorderVideoBitrate(width, height, fps),
+    };
+
+    if (mimeType) {
+      recorderOptions.mimeType = mimeType;
+    }
+
+    if (!els.removeAudio.checked) {
+      recorderOptions.audioBitsPerSecond = 96000;
+    }
+
+    recorder = new MediaRecorder(outputStream, recorderOptions);
+
+    const result = new Promise((resolve, reject) => {
+      recorder.addEventListener("dataavailable", (event) => {
+        if (event.data?.size) {
+          chunks.push(event.data);
+        }
+      });
+
+      recorder.addEventListener("error", (event) => {
+        reject(event.error || new Error("Falha no modo leve do navegador."));
+      });
+
+      recorder.addEventListener("stop", () => {
+        const blob = new Blob(chunks, { type: "video/webm" });
+        if (!blob.size) {
+          reject(new Error("O modo leve não conseguiu gerar um WebM."));
+          return;
+        }
+        resolve(blob);
+      });
+    });
+
+    video.addEventListener(
+      "ended",
+      () => {
+        if (recorder?.state !== "inactive") {
+          recorder.stop();
+        }
+      },
+      { once: true },
+    );
+
+    const drawFrame = () => {
+      context.drawImage(video, 0, 0, width, height);
+      if (Number.isFinite(video.duration) && video.duration > 0) {
+        const percent = Math.min(99, Math.max(3, Math.round((video.currentTime / video.duration) * 100)));
+        setProgress(percent, "Convertendo no modo leve...");
+      }
+      if (!video.ended) {
+        frameId = requestAnimationFrame(drawFrame);
+      }
+    };
+
+    recorder.start(1000);
+    await video.play();
+    drawFrame();
+    return await result;
+  } finally {
+    cancelAnimationFrame(frameId);
+    if (recorder?.state !== "inactive") {
+      try {
+        recorder.stop();
+      } catch {
+        // Recorder may already be stopping after a browser error.
+      }
+    }
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+    video.remove();
+    stopStream(outputStream);
+    stopStream(sourceStream);
+    URL.revokeObjectURL(sourceUrl);
+  }
+}
+
+function waitForVideoMetadata(video) {
+  return new Promise((resolve, reject) => {
+    if (video.readyState >= 1) {
+      resolve();
+      return;
+    }
+
+    video.addEventListener("loadedmetadata", resolve, { once: true });
+    video.addEventListener(
+      "error",
+      () => reject(new Error("O navegador não conseguiu ler esse vídeo no modo leve.")),
+      { once: true },
+    );
+  });
+}
+
+function fallbackSize(sourceWidth, sourceHeight) {
+  const selected = els.sizeSelect.value;
+  const maxHeight = selected === "original" ? 720 : Number(selected);
+  const scale = Number.isFinite(maxHeight) ? Math.min(1, maxHeight / sourceHeight) : 1;
+  const width = Math.max(2, Math.round((sourceWidth * scale) / 2) * 2);
+  const height = Math.max(2, Math.round((sourceHeight * scale) / 2) * 2);
+  return { width, height };
+}
+
+function fallbackFps() {
+  return els.fpsSelect.value === "original" ? 30 : Number(els.fpsSelect.value);
+}
+
+function recorderMimeType() {
+  const codec = els.codecSelect.value === "vp8" ? "vp8" : "vp9";
+  const candidates = els.removeAudio.checked
+    ? [`video/webm;codecs=${codec}`, "video/webm;codecs=vp8", "video/webm"]
+    : [`video/webm;codecs=${codec},opus`, `video/webm;codecs=${codec}`, "video/webm;codecs=vp8,opus", "video/webm"];
+
+  return candidates.find((type) => MediaRecorder.isTypeSupported(type)) || "";
+}
+
+function recorderVideoBitrate(width, height, fps) {
+  const crf = Number(els.qualityRange.value);
+  const quality = clamp((42 - crf) / 18, 0.35, 1.45);
+  return Math.round(clamp(width * height * fps * 0.085 * quality, 250_000, 4_000_000));
+}
+
+function stopStream(stream) {
+  stream?.getTracks().forEach((track) => track.stop());
+}
+
+function showOutput(blob) {
+  revokeUrl("outputUrl");
+  state.outputUrl = URL.createObjectURL(blob);
+  els.videoPreview.src = state.outputUrl;
+  els.videoPreview.hidden = false;
+  els.previewEmpty.hidden = true;
+  els.downloadLink.href = state.outputUrl;
+  els.downloadLink.download = outputFileName(state.inputFile.name);
+  els.downloadLink.hidden = false;
+  els.outputSize.textContent = formatBytes(blob.size);
+  els.savingSize.textContent = savingsText(state.inputFile.size, blob.size);
+}
+
+function isMemoryError(error) {
+  const detail = error?.message || String(error);
+  return /memory|allocation|array buffer|out of bounds|cannot enlarge/i.test(detail);
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function buildFfmpegArgs(inputName, outputName) {

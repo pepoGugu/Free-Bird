@@ -22,3 +22,4 @@ App estático para comprimir e converter vídeos para `.webm` direto no navegado
 - A conversão usa FFmpeg WebAssembly carregado por CDN.
 - Arquivos grandes dependem da memória do navegador.
 - VP9 costuma gerar arquivos menores; VP8 costuma converter mais rápido.
+- Se o FFmpeg ficar sem memória, o app tenta automaticamente um modo leve com `MediaRecorder`.
