@@ -95,14 +95,14 @@ function bindEvents() {
 }
 
 function setupTheme() {
-  const savedTheme = localStorage.getItem("passarinho-theme");
+  const savedTheme = localStorage.getItem("free-bird-theme");
   const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   setTheme(savedTheme || (prefersDark ? "dark" : "light"));
 }
 
 function setTheme(theme) {
   els.root.dataset.theme = theme;
-  localStorage.setItem("passarinho-theme", theme);
+  localStorage.setItem("free-bird-theme", theme);
   els.themeToggle.setAttribute(
     "aria-label",
     theme === "dark" ? "Usar tema claro" : "Usar tema escuro",
@@ -198,7 +198,7 @@ async function convertVideo() {
   try {
     const ffmpeg = await getFFmpeg();
     const inputName = `input.${extensionFromName(state.inputFile.name)}`;
-    const outputName = "passarinho-convertido.webm";
+    const outputName = "free-bird-convertido.webm";
 
     await cleanVirtualFiles(ffmpeg, [inputName, outputName]);
     await ffmpeg.writeFile(inputName, await window.FFmpegUtil.fetchFile(state.inputFile));
