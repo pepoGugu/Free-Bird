@@ -1,4 +1,4 @@
-# Passarinho WebM
+# Free Bird WebM
 
 App estático para comprimir e converter vídeos para `.webm` direto no navegador, pronto para publicar no GitHub Pages.
 
@@ -8,13 +8,6 @@ App estático para comprimir e converter vídeos para `.webm` direto no navegado
 2. Escolha ou arraste um vídeo.
 3. Ajuste compressão, tamanho, FPS, codec e áudio.
 4. Clique em **Converter para WebM** e baixe o resultado.
-
-## Publicar no GitHub Pages
-
-1. Envie estes arquivos para um repositório no GitHub.
-2. Vá em **Settings > Pages**.
-3. Em **Build and deployment**, escolha **Deploy from a branch**.
-4. Selecione a branch e a pasta raiz.
 
 ## Observações
 
