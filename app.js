@@ -201,7 +201,7 @@ async function convertVideo() {
     const outputName = "free-bird-convertido.webm";
 
     await cleanVirtualFiles(ffmpeg, [inputName, outputName]);
-    await ffmpeg.writeFile(inputName, await window.FFmpegUtil.fetchFile(state.inputFile));
+    await ffmpeg.writeFile(inputName, await fetchFileBytes(state.inputFile));
 
     setProgress(7, "Convertendo para WebM...");
     const args = buildFfmpegArgs(inputName, outputName);
@@ -238,12 +238,11 @@ async function getFFmpeg() {
     return state.ffmpeg;
   }
 
-  if (!window.FFmpegWASM || !window.FFmpegUtil) {
-    throw new Error("FFmpeg ainda não carregou. Verifique sua conexão e tente de novo.");
+  if (!window.FFmpegWASM) {
+    throw new Error("Arquivo vendor/ffmpeg/ffmpeg.js não carregou. Envie a pasta vendor/ffmpeg para o GitHub e aguarde o Pages atualizar.");
   }
 
   const { FFmpeg } = window.FFmpegWASM;
-  const { toBlobURL } = window.FFmpegUtil;
   const ffmpeg = new FFmpeg();
 
   ffmpeg.on("progress", ({ progress }) => {
@@ -269,6 +268,28 @@ async function getFFmpeg() {
   els.supportStatus.innerHTML = '<i data-lucide="check-circle-2"></i> FFmpeg carregado';
   renderIcons();
   return ffmpeg;
+}
+
+async function fetchFileBytes(source) {
+  if (source instanceof Blob) {
+    return new Uint8Array(await source.arrayBuffer());
+  }
+
+  const response = await fetch(source);
+  if (!response.ok) {
+    throw new Error(`Não consegui ler o arquivo: ${response.status}`);
+  }
+  return new Uint8Array(await response.arrayBuffer());
+}
+
+async function toBlobURL(url, mimeType) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Não consegui carregar FFmpeg core: ${response.status}`);
+  }
+
+  const blob = new Blob([await response.arrayBuffer()], { type: mimeType });
+  return URL.createObjectURL(blob);
 }
 
 function buildFfmpegArgs(inputName, outputName) {
