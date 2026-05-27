@@ -1,30 +1,30 @@
 :root {
   color-scheme: light;
-  --bg: #f6fffd;
+  --bg: #f8fcfb;
   --surface: #ffffff;
-  --surface-soft: #e9fbf7;
+  --surface-soft: #edf7f5;
   --text: #10201d;
   --muted: #61716d;
-  --line: #cbe9e2;
-  --brand: #12c7b5;
-  --brand-strong: #079d90;
-  --brand-soft: #d9faf5;
+  --line: #d2e5e1;
+  --brand: #4bb8ad;
+  --brand-strong: #2e8f86;
+  --brand-soft: #e2f3f0;
   --accent: #f1b84b;
   --danger: #b13b47;
-  --shadow: 0 24px 70px rgba(12, 97, 88, 0.16);
+  --shadow: 0 24px 70px rgba(30, 86, 80, 0.14);
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #031d19;
-  --surface: #07332d;
-  --surface-soft: #0a443c;
+  --bg: #071b18;
+  --surface: #0b302b;
+  --surface-soft: #123d37;
   --text: #effffb;
   --muted: #a6c7c0;
-  --line: #17675d;
-  --brand: #12c7b5;
-  --brand-strong: #64eadc;
-  --brand-soft: #0d564d;
+  --line: #245d56;
+  --brand: #4bb8ad;
+  --brand-strong: #88d6cf;
+  --brand-soft: #1b4e48;
   --accent: #f0c56b;
   --danger: #ff8b94;
   --shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
@@ -42,7 +42,7 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    radial-gradient(circle at top left, rgba(18, 199, 181, 0.18), transparent 34rem),
+    radial-gradient(circle at top left, rgba(75, 184, 173, 0.16), transparent 34rem),
     var(--bg);
   color: var(--text);
   font-family:
@@ -87,7 +87,7 @@ a {
   width: 46px;
   height: 46px;
   border-radius: 14px;
-  box-shadow: 0 12px 26px rgba(18, 199, 181, 0.22);
+  box-shadow: 0 12px 26px rgba(75, 184, 173, 0.2);
 }
 
 .brand strong,
